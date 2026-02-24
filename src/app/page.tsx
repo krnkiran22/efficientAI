@@ -1,9 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -12,8 +10,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
   AreaChart,
   Area
 } from "recharts";
@@ -24,9 +20,10 @@ import {
   AlertCircle,
   CheckCircle2,
   TrendingUp,
-  LayoutDashboard,
   PlusCircle,
-  HardDrive
+  HardDrive,
+  BarChart3,
+  RotateCcw
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -46,28 +43,42 @@ interface TestEntry {
   efficiency: number;
 }
 
-// --- Initial Mock Data ---
-const INITIAL_DATA: TestEntry[] = [
-  { id: "1", timestamp: Date.now() - 432000000, totalHours: 24, goodHours: 22, badHours: 2, efficiency: 91.67 },
-  { id: "2", timestamp: Date.now() - 345600000, totalHours: 24, goodHours: 19, badHours: 5, efficiency: 79.17 },
-  { id: "3", timestamp: Date.now() - 259200000, totalHours: 24, goodHours: 23, badHours: 1, efficiency: 95.83 },
-  { id: "4", timestamp: Date.now() - 172800000, totalHours: 24, goodHours: 18, badHours: 6, efficiency: 75.00 },
-  { id: "5", timestamp: Date.now() - 86400000, totalHours: 24, goodHours: 21, badHours: 3, efficiency: 87.50 },
-];
+const STORAGE_KEY = "sd_efficiency_data";
 
 export default function EfficiencyDashboard() {
-  const [entries, setEntries] = useState<TestEntry[]>(INITIAL_DATA);
+  const [entries, setEntries] = useState<TestEntry[]>([]);
   const [formData, setFormData] = useState({ total: "", good: "", bad: "" });
   const [error, setError] = useState<string | null>(null);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // --- Persistence ---
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        setEntries(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse saved data", e);
+      }
+    }
+    setIsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    }
+  }, [entries, isLoaded]);
 
   // --- Calculations ---
   const stats = useMemo(() => {
+    if (entries.length === 0) return { totalRecording: 0, totalGood: 0, totalBad: 0, avgEfficiency: 0 };
+
     const totalRecording = entries.reduce((sum, e) => sum + e.totalHours, 0);
     const totalGood = entries.reduce((sum, e) => sum + e.goodHours, 0);
     const totalBad = entries.reduce((sum, e) => sum + e.badHours, 0);
-    const avgEfficiency = entries.length > 0
-      ? entries.reduce((sum, e) => sum + e.efficiency, 0) / entries.length
-      : 0;
+    const avgEfficiency = entries.reduce((sum, e) => sum + e.efficiency, 0) / entries.length;
 
     return { totalRecording, totalGood, totalBad, avgEfficiency };
   }, [entries]);
@@ -116,10 +127,20 @@ export default function EfficiencyDashboard() {
 
     setEntries(prev => [newEntry, ...prev]);
     setFormData({ total: "", good: "", bad: "" });
+    setShowAnalysis(false); // Hide analysis when new data is added until re-analyzed
   };
 
   const removeEntry = (id: string) => {
     setEntries(prev => prev.filter(e => e.id !== id));
+    if (entries.length <= 1) setShowAnalysis(false);
+  };
+
+  const clearAll = () => {
+    if (confirm("Are you sure you want to clear all data?")) {
+      setEntries([]);
+      setShowAnalysis(false);
+      localStorage.removeItem(STORAGE_KEY);
+    }
   };
 
   return (
@@ -133,50 +154,60 @@ export default function EfficiencyDashboard() {
             </div>
             <h1 className="text-lg sm:text-xl font-bold tracking-tight">SD Efficiency <span className="text-primary">Pro</span></h1>
           </div>
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <div className="hidden sm:flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {entries.length > 0 && (
+              <button
+                onClick={clearAll}
+                className="flex items-center gap-2 text-xs text-muted-foreground hover:text-destructive transition-colors px-3 py-1.5 rounded-md hover:bg-destructive/10"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Clear Data</span>
+              </button>
+            )}
+            <div className="h-4 w-[1px] bg-border hidden sm:block"></div>
+            <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
               <Clock className="w-4 h-4" />
-              <span>Session: {new Date().toLocaleTimeString()}</span>
+              <span>Session Active</span>
             </div>
           </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-8">
-        {/* Metric Cards */}
+        {/* Metric Cards - Only show values if analysis is requested OR show placeholders */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <MetricCard
             title="Total Recording"
-            value={`${stats.totalRecording.toFixed(1)}h`}
+            value={showAnalysis ? `${stats.totalRecording.toFixed(1)}h` : "---"}
             icon={<Clock className="w-5 h-5" />}
             description="Accumulated test time"
           />
           <MetricCard
             title="Avg. Efficiency"
-            value={`${stats.avgEfficiency.toFixed(2)}%`}
+            value={showAnalysis ? `${stats.avgEfficiency.toFixed(2)}%` : "---"}
             icon={<TrendingUp className="w-5 h-5" />}
-            color={stats.avgEfficiency > 90 ? "text-green-500" : stats.avgEfficiency > 80 ? "text-yellow-500" : "text-red-500"}
+            color={showAnalysis ? (stats.avgEfficiency > 90 ? "text-green-500" : stats.avgEfficiency > 80 ? "text-yellow-500" : "text-red-500") : "text-muted-foreground"}
             description="Overall data health"
           />
           <MetricCard
             title="Useful Hours"
-            value={`${stats.totalGood.toFixed(1)}h`}
+            value={showAnalysis ? `${stats.totalGood.toFixed(1)}h` : "---"}
             icon={<CheckCircle2 className="w-5 h-5" />}
-            color="text-blue-500"
+            color={showAnalysis ? "text-blue-500" : "text-muted-foreground"}
             description="High fidelity recording"
           />
           <MetricCard
             title="Wasted Hours"
-            value={`${stats.totalBad.toFixed(1)}h`}
+            value={showAnalysis ? `${stats.totalBad.toFixed(1)}h` : "---"}
             icon={<AlertCircle className="w-5 h-5" />}
-            color="text-destructive"
+            color={showAnalysis ? "text-destructive" : "text-muted-foreground"}
             description="Corrupted or lost data"
           />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Input Form */}
-          <section className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <section className="bg-card border border-border rounded-2xl p-6 shadow-sm h-fit">
             <div className="flex items-center gap-2 mb-6">
               <PlusCircle className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-semibold">Log New Entry</h2>
@@ -229,86 +260,116 @@ export default function EfficiencyDashboard() {
                 </div>
               )}
 
-              <button
-                type="submit"
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 rounded-lg transition-all shadow-lg shadow-primary/20 active:scale-[0.98]"
-              >
-                Add Test Result
-              </button>
+              <div className="pt-2 space-y-3">
+                <button
+                  type="submit"
+                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 rounded-lg transition-all shadow-lg shadow-primary/20 active:scale-[0.98] flex items-center justify-center gap-2"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Add Row
+                </button>
+
+                {entries.length > 0 && !showAnalysis && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAnalysis(true)}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-3 rounded-lg transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98] flex items-center justify-center gap-2"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    Get Analysis
+                  </button>
+                )}
+              </div>
             </form>
           </section>
 
           {/* Visualization Section */}
           <section className="lg:col-span-2 space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Pie Chart */}
-              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col items-center">
-                <h3 className="text-sm font-medium text-muted-foreground mb-4 w-full">Data Health Ratio</h3>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {pieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+            {!showAnalysis ? (
+              <div className="bg-card border border-border border-dashed rounded-2xl p-12 flex flex-col items-center justify-center text-center space-y-4">
+                <div className="p-4 bg-secondary/50 rounded-full">
+                  <BarChart3 className="w-12 h-12 text-muted-foreground/50" />
                 </div>
-                <div className="flex gap-6 mt-2">
-                  {pieData.map((d) => (
-                    <div key={d.name} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
-                      <span className="text-xs text-muted-foreground">{d.name}</span>
-                    </div>
-                  ))}
+                <div>
+                  <h3 className="text-lg font-medium">No Analysis Generated</h3>
+                  <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                    {entries.length > 0
+                      ? "Hit the 'Get Analysis' button to process your current data rows."
+                      : "Add test data rows to begin the efficiency analysis."}
+                  </p>
                 </div>
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in zoom-in-95 duration-500">
+                {/* Pie Chart */}
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col items-center">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-4 w-full">Data Health Ratio</h3>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={pieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex gap-6 mt-2">
+                    {pieData.map((d) => (
+                      <div key={d.name} className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: d.color }} />
+                        <span className="text-xs text-muted-foreground">{d.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-              {/* Trend Chart */}
-              <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-                <h3 className="text-sm font-medium text-muted-foreground mb-4">Efficiency Trend (%)</h3>
-                <div className="h-64 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={[...entries].reverse()}>
-                      <defs>
-                        <linearGradient id="colorEff" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
-                      <XAxis
-                        dataKey="timestamp"
-                        hide
-                      />
-                      <YAxis domain={[0, 100]} stroke="#71717a" fontSize={12} tickFormatter={(val) => `${val}%`} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a" }}
-                        labelFormatter={(label) => new Date(label).toLocaleDateString()}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="efficiency"
-                        stroke="#3b82f6"
-                        strokeWidth={2}
-                        fillOpacity={1}
-                        fill="url(#colorEff)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                {/* Trend Chart */}
+                <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+                  <h3 className="text-sm font-medium text-muted-foreground mb-4">Efficiency Trend (%)</h3>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={[...entries].reverse()}>
+                        <defs>
+                          <linearGradient id="colorEff" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                        <XAxis
+                          dataKey="timestamp"
+                          hide
+                        />
+                        <YAxis domain={[0, 100]} stroke="#71717a" fontSize={12} tickFormatter={(val) => `${val}%`} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: "#18181b", borderColor: "#27272a" }}
+                          labelFormatter={(label) => new Date(label).toLocaleDateString()}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="efficiency"
+                          stroke="#3b82f6"
+                          strokeWidth={2}
+                          fillOpacity={1}
+                          fill="url(#colorEff)"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </section>
         </div>
 
@@ -317,10 +378,10 @@ export default function EfficiencyDashboard() {
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Activity className="w-5 h-5 text-primary" />
-              <h2 className="text-base sm:text-lg font-semibold">History & Details</h2>
+              <h2 className="text-base sm:text-lg font-semibold">Test Data Rows</h2>
             </div>
             <span className="text-[10px] sm:text-xs bg-secondary px-2 sm:px-2.5 py-1 rounded-full text-muted-foreground font-medium">
-              {entries.length} Entries
+              {entries.length} Rows Logged
             </span>
           </div>
           <div className="overflow-x-auto">
@@ -330,15 +391,14 @@ export default function EfficiencyDashboard() {
                   <th className="px-6 py-3 font-semibold">Date</th>
                   <th className="px-6 py-3 font-semibold">Total Time</th>
                   <th className="px-6 py-3 font-semibold">Good/Bad</th>
-                  <th className="px-6 py-3 font-semibold">Efficiency</th>
                   <th className="px-6 py-3 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {entries.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
-                      No data entries yet. Add your first test result above.
+                    <td colSpan={4} className="px-6 py-12 text-center text-muted-foreground">
+                      No data entries yet. Use the form to add your first row.
                     </td>
                   </tr>
                 ) : (
@@ -365,25 +425,6 @@ export default function EfficiencyDashboard() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-24 h-2 bg-secondary rounded-full overflow-hidden hidden sm:block">
-                            <div
-                              className={cn(
-                                "h-full rounded-full transition-all duration-500",
-                                entry.efficiency > 90 ? "bg-green-500" : entry.efficiency > 80 ? "bg-yellow-500" : "bg-destructive"
-                              )}
-                              style={{ width: `${entry.efficiency}%` }}
-                            />
-                          </div>
-                          <span className={cn(
-                            "text-sm font-bold min-w-[3rem]",
-                            entry.efficiency > 90 ? "text-green-500" : entry.efficiency > 80 ? "text-yellow-500" : "text-destructive"
-                          )}>
-                            {entry.efficiency.toFixed(1)}%
-                          </span>
-                        </div>
-                      </td>
                       <td className="px-6 py-4 text-right">
                         <button
                           onClick={() => removeEntry(entry.id)}
@@ -405,7 +446,7 @@ export default function EfficiencyDashboard() {
       <footer className="mt-12 py-8 border-t border-border bg-card/50">
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-muted-foreground">
-            Built for High-Performance SD Card Stress Testing Analytics.
+            SD Card Efficiency Pro • Secure Localized Data Storage
           </p>
         </div>
       </footer>
