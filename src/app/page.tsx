@@ -428,11 +428,20 @@ function MetricCard({
   description: string;
   color?: string;
 }) {
+  const getBgColor = (c: string) => {
+    if (c.includes('green-500')) return 'bg-green-500/10';
+    if (c.includes('yellow-500')) return 'bg-yellow-500/10';
+    if (c.includes('blue-500')) return 'bg-blue-500/10';
+    if (c.includes('destructive')) return 'bg-red-500/10';
+    if (c.includes('red-500')) return 'bg-red-500/10';
+    return 'bg-secondary/50';
+  };
+
   return (
     <div className="bg-card border border-border p-6 rounded-2xl shadow-sm hover:border-primary/20 transition-all hover:shadow-md">
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{title}</span>
-        <div className={cn("p-1.5 rounded-lg bg-secondary/50", color.replace('text-', 'bg-').replace('500', '500/10'))}>
+        <div className={cn("p-1.5 rounded-lg", getBgColor(color))}>
           <div className={color}>{icon}</div>
         </div>
       </div>
