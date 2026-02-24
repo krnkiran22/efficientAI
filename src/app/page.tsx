@@ -131,7 +131,7 @@ export default function EfficiencyDashboard() {
             <div className="p-2 bg-primary/10 rounded-lg">
               <HardDrive className="w-6 h-6 text-primary" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight">SD Efficiency <span className="text-primary">Pro</span></h1>
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight">SD Efficiency <span className="text-primary">Pro</span></h1>
           </div>
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <div className="hidden sm:flex items-center gap-2">
@@ -317,9 +317,9 @@ export default function EfficiencyDashboard() {
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Activity className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold">History & Details</h2>
+              <h2 className="text-base sm:text-lg font-semibold">History & Details</h2>
             </div>
-            <span className="text-xs bg-secondary px-2.5 py-1 rounded-full text-muted-foreground font-medium">
+            <span className="text-[10px] sm:text-xs bg-secondary px-2 sm:px-2.5 py-1 rounded-full text-muted-foreground font-medium">
               {entries.length} Entries
             </span>
           </div>
@@ -387,7 +387,7 @@ export default function EfficiencyDashboard() {
                       <td className="px-6 py-4 text-right">
                         <button
                           onClick={() => removeEntry(entry.id)}
-                          className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                          className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -445,7 +445,7 @@ function MetricCard({
           <div className={color}>{icon}</div>
         </div>
       </div>
-      <div className={cn("text-2xl font-bold mb-1", color)}>{value}</div>
+      <div className={cn("text-xl sm:text-2xl font-bold mb-1", color)}>{value}</div>
       <p className="text-xs text-muted-foreground line-clamp-1">{description}</p>
     </div>
   );
